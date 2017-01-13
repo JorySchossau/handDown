@@ -7,7 +7,7 @@ Usage:
   handDown.py [(--user=NETID | --list=FILE)] [--filter=FILTER] [--out=DIR] [--recent]
   handDown.py [-h]
 
-Downloads files from HandIn filtering by netids and filename fuzzy matching.
+Downloads files from HandIn filtering by netids and filename lazy matching.
 Also lists by assignment who did not submit anything, and provides an
 email formatted version of that list for emailing.
 
