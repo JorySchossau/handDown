@@ -1,5 +1,5 @@
 # handDown
-Downloads files from HandIn filtering by netids and filename fuzzy matching. Also lists by assignment who did not submit anything.
+Downloads files from HandIn filtering by netids and filename fuzzy matching. Also lists by assignment who did not submit anything. Includes a feature to show histogram data from D2L about prelabs sorted by your netids and list who is struggling.
 
 Usage:
 ```raw
