@@ -6,6 +6,7 @@
 Usage:
   handDown.py [(--user=NETID | --list=FILE)] [--filter=FILTER] [--out=DIR] [--recent]
   handDown.py [(--user=NETID | --list=FILE)] [--prelab=PLFILE]
+  handDown.py --seatAssignment=SAFILE
   handDown.py [-h]
 
 Downloads files from HandIn filtering by netids and filename lazy matching.
@@ -14,13 +15,14 @@ email formatted version of that list for emailing. Another function
 allows viewing score details of prelabs, filtering by netids.
 
 Options:
--h, --help          Show this message
--u, --user=NETID    Downloads files only for a single student
--l, --list=FILE     Downloads files for many students, netids in file (instead of -u)
--f, --filter=FILTER Filename filter. la,pro matches lab01.py, lab02.py, proj01.py
--o, --out=DIR       Download files to directory (default: ./downloaded)
--r, --recent        For each request, only downloads the latest version
--p, --prelab=PLFILE Filename of the prelab csv from D2L. Details scores <= 60%
+-h, --help                     Show this message
+-u, --user=NETID               Downloads files only for a single student
+-l, --list=FILE                Downloads files for many students, netids in file (instead of -u)
+-f, --filter=FILTER            Filename filter. la,pro matches lab01.py, lab02.py, proj01.py
+-o, --out=DIR                  Download files to directory (default: ./downloaded)
+-r, --recent                   For each request, only downloads the latest version
+-p, --prelab=PLFILE            Filename of the prelab csv from D2L. Details scores <= 60%
+-s, --seatAssignment=SAFILE    Generate a seat assignment random pairing from netids file
 
 Examples:
     handDown.py --user mynetid --filter 01 --out week1 -r
@@ -75,6 +77,7 @@ import re
 import os
 import csv
 import math
+import random
 from collections import defaultdict
 try: 
   from BeautifulSoup import BeautifulSoup
@@ -90,6 +93,7 @@ handinStudentsURL='http://secure.cse.msu.edu/handin/admin/list_students.php3?Tra
 http=None
 sectionIDs=[] ## will hold unique identifier strings for each section (unique to handin system)
 fileIDsByStudent = {} ## fileIDs for files to download organized by student NETID {NETID:{filename:[list of urls]}
+namesByNetID = {} ## fname lname for students {NETID:"firstname lastname"}
 targetNetIDs = [] ## will hold students about whom we'll get data
 setOfFilenamesSubmitted = set() ## holds unique set of filenames submitted that match filter (used to identify lack of submissions)
 setOfFilenamesLooking = set()
@@ -216,17 +220,23 @@ def downloadRequestedFilesFromRequestedNetIDs(recentOnly=False, outDir=None):
 
 def parseStudentsPages(): ## Could be repurposed to automatically get netids given a section number
     global namesByNetID
-    for eachSecID in sectionIDs[1:]:
+    for eachSecID in sectionIDs:
         url = handinStudentsURL+eachSecID
         headers = urllib3.util.make_headers(basic_auth=username+':'+password)
         r = http.request('GET', url, headers=headers)
         parsed_html = BeautifulSoup(r.data, "html.parser")
         table = parsed_html.body.find_all('table')[1:] ## drop first table because it's the header
         recs = table[0].find_all('td')[5:]
-        for reci in range(0,len(recs),3):
-            netid = recs[reci+1].text.rstrip()
+        reci = 0
+        while(reci < len(recs)-1):
+            if(len(recs[reci].text) == 0):
+                reci += 5
+                continue
+            netid = recs[reci+2].text.rstrip()
             fullname = recs[reci].text.rstrip().split()
-            namesByNetID[netid] = fullname[1]+', '+fullname[0] ## create "Lname, Fname" for matching D2L
+            #namesByNetID[netid] = fullname[1]+', '+fullname[0] ## create "Lname, Fname" for matching D2L
+            namesByNetID[netid] = ' '.join(fullname) ## create "Lname, Fname" for matching D2L
+            reci += 3
         r.release_conn()
 
 def showD2LScoresFromCSV(csvFilename):
@@ -269,6 +279,18 @@ def showD2LScoresFromCSV(csvFilename):
     print('All 60% or below')
     print(allStr[:-2]) ## remove both the trailing comma and space
 
+def makeSeatAssignments():
+    if (len(targetNetIDs) == 0):
+        return
+    random.shuffle(targetNetIDs)
+    numids = len(targetNetIDs)
+    groupid = 0
+    maxgroupid = len(targetNetIDs)//2
+    for i in range(maxgroupid):
+        print('{: >2}'.format(str(i))+': '+namesByNetID[targetNetIDs[i*2]]+' & '+namesByNetID[targetNetIDs[i*2+1]])
+    if (numids%2 != 0): ## have extra
+        print("extra:",namesByNetID[targetNetIDs[-1]])
+
 if __name__ == '__main__':
     arguments = docopt(__doc__, version='handDown 0.1')
     if (arguments['--out'] ==  None):
@@ -283,10 +305,20 @@ if __name__ == '__main__':
     if (arguments['--prelab']!=None): ## load prelab CSV file and show CSV results
         showD2LScoresFromCSV(arguments['--prelab'])
     else: ## otherwise perform handin file scraping
-        username=input('username: ')
-        password=getpass.getpass()
-        http = urllib3.PoolManager() ## init web request engine
-        parseMainPage() ## scrape main page for section IDs used by handin
-        parseResultsPages() ## scrape student data into data structure
-        downloadRequestedFilesFromRequestedNetIDs(recentOnly=arguments['--recent'], outDir=arguments['--out']) ## download and save select files
-        checkForNoSubmissions() ## see if anyone didn't submit ^^^ assignments
+        if (arguments['--seatAssignment']!=None):
+            parseTargetNetIDsFile(arguments['--seatAssignment'])
+            username=input('username: ')
+            password=getpass.getpass()
+            http = urllib3.PoolManager() ## init web request engine
+            parseMainPage() ## scrape main page for section IDs used by handin
+            parseResultsPages() ## scrape student data into data structure
+            parseStudentsPages() ## scrape student data into data structure
+            makeSeatAssignments()
+        else:
+            username=input('username: ')
+            password=getpass.getpass()
+            http = urllib3.PoolManager() ## init web request engine
+            parseMainPage() ## scrape main page for section IDs used by handin
+            parseResultsPages() ## scrape student data into data structure
+            downloadRequestedFilesFromRequestedNetIDs(recentOnly=arguments['--recent'], outDir=arguments['--out']) ## download and save select files
+            checkForNoSubmissions() ## see if anyone didn't submit ^^^ assignments
