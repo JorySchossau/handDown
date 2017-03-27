@@ -245,6 +245,7 @@ def showD2LScoresFromCSV(csvFilename):
     netidToName = {} ## {netid:name}
     getAllStudents = False
     maxScore = 0
+    notTurnedIn = set(targetNetIDs) ## assume no one turned it in, then remove their name as we go
     if (len(targetNetIDs) == 0):
         getAllStudents = True
     with open(csvFilename, 'rt') as csvfile:
@@ -261,6 +262,11 @@ def showD2LScoresFromCSV(csvFilename):
             scoresHist[score] += 1
             scoresToNetidsList[score].append(netid)
             netidToName[netid] = fullname
+            notTurnedIn.remove(netid)
+    print("Not submitted by")
+    for netid in notTurnedIn:
+        print(netid)
+    print()
     print("Student Scores Histogram")
     print("Score: Count")
     for eachScore,eachCount in sorted(scoresHist.items()):
